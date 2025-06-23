@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fleet Log Book</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 1rem; }
+    .container { max-width: 900px; margin: auto; background: #fff; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h2 { text-align: center; margin-bottom: 1.5rem; }
+    form label { font-weight: bold; margin-top: 1rem; display: block; }
+    input { width: 100%; padding: 10px; margin: 0.3rem 0 1rem; border: 1px solid #ccc; border-radius: 5px; }
+    button { width: 100%; padding: 12px; background: #007bff; color: white; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; margin-top: 1rem; }
+    button:hover { background: #0056b3; }
+    .output { margin-top: 1.5rem; padding: 1rem; background: #e9ffe9; border: 1px solid #b2ffb2; border-radius: 5px; }
+    #signin { background-color: #34a853; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Fleet Log Book Entry</h2>
+    <button id="signin">Sign in with Google</button>
+    <form id="logForm" style="display:none;">
+      <label>Date</label><input type="date" id="date" required>
+      <label>Driver</label><input type="text" id="driver" required>
+      <label>Vehicle</label><input type="text" id="vehicle" required>
+      <label>Earnings</label><input type="number" id="earnings" required>
+      <label>Cash Collection</label><input type="number" id="cashCollection" required>
+      <label>No. of Trips</label><input type="number" id="trips" required>
+      <label>Toll</label><input type="number" id="toll" value="0">
+      <label>Login Hours</label><input type="number" id="loginHours" value="0">
+      <label>Other Expense</label><input type="number" id="otherExpense" value="0">
+      <label>Uber Commission</label><input type="number" id="uberCommission" readonly>
+      <label>Pay %</label><input type="number" id="payPercent" readonly>
+      <label>Salary</label><input type="number" id="salary" readonly>
+      <label>CRFD</label><input type="number" id="crfd" readonly>
+      <label>P&L</label><input type="number" id="pl" readonly>
+      <button type="submit">Save Entry</button>
+      <button type="button" onclick="downloadExcel()">Download Excel</button>
+    </form>
+    <div class="output" id="output" style="display:none;"></div>
+  </div>
+  <script>
+    const CLIENT_ID = '1090927547793-838077v78npp2s4fg32i3kobkp0mkec3.apps.googleusercontent.com';
+    const SPREADSHEET_ID = '19GeheC9UdPOUNrf_k3ItYYysWqhjEwzKgmfXM8POdXA';
+    const SHEET_NAME = 'Database';
+    function getPayPercent(earnings) {
+      if (earnings < 3000) return 0;
+      if (earnings < 4500) return 60;
+      if (earnings < 5500) return 65;
+      if (earnings <= 7000) return 70;
+      return 0;
+    }
+    function updateCalculations() {
+      const earnings = parseFloat(document.getElementById('earnings').value) || 0;
+      const cash = parseFloat(document.getElementById('cashCollection').value) || 0;
+      const toll = parseFloat(document.getElementById('toll').value) || 0;
+      const expense = parseFloat(document.getElementById('otherExpense').value) || 0;
+      const payPercent = getPayPercent(earnings);
+      const salary = earnings * (payPercent / 100);
+      const commission = cash - earnings;
+      const crfd = cash - salary - expense;
+      const pl = earnings - salary - expense - 1080 + toll;
+      document.getElementById('payPercent').value = payPercent;
+      document.getElementById('salary').value = salary.toFixed(2);
+      document.getElementById('uberCommission').value = commission.toFixed(2);
+      document.getElementById('crfd').value = crfd.toFixed(2);
+      document.getElementById('pl').value = pl.toFixed(2);
+    }
+    document.querySelectorAll('#earnings, #cashCollection, #toll, #otherExpense')
+      .forEach(input => input.addEventListener('input', updateCalculations));
+    function gapiInit() {
+      gapi.load('client:auth2', () => {
+        gapi.client.init({
+          clientId: CLIENT_ID,
+          scope: 'https://www.googleapis.com/auth/spreadsheets'
+        }).then(() => {
+          document.getElementById('signin').onclick = () => {
+            gapi.auth2.getAuthInstance().signIn().then(() => {
+              document.getElementById('signin').style.display = 'none';
+              document.getElementById('logForm').style.display = 'block';
+            });
+          };
+        });
+      });
+    }
+    function appendToSheet(rowData) {
+      gapi.client.sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: SHEET_NAME,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [rowData] }
+      }).then(() => {
+        const output = document.getElementById('output');
+        output.innerHTML = '<strong>✅ Entry saved to Google Sheet!</strong>';
+        output.style.display = 'block';
+        document.getElementById('logForm').reset();
+        updateCalculations();
+      }, err => {
+        alert('Error saving to sheet: ' + err.message);
+      });
+    }
+    document.getElementById('logForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      updateCalculations();
+      const rowData = [
+        document.getElementById('date').value,
+        document.getElementById('driver').value,
+        document.getElementById('vehicle').value,
+        +document.getElementById('earnings').value,
+        +document.getElementById('cashCollection').value,
+        +document.getElementById('trips').value,
+        +document.getElementById('toll').value,
+        +document.getElementById('loginHours').value,
+        +document.getElementById('otherExpense').value,
+        +document.getElementById('uberCommission').value,
+        +document.getElementById('payPercent').value,
+        +document.getElementById('salary').value,
+        +document.getElementById('crfd').value,
+        +document.getElementById('pl').value
+      ];
+      appendToSheet(rowData);
+    });
+    function downloadExcel() {
+      const headers = ['Date','Driver','Vehicle','Earnings','Cash Collection','No.Of Trips','Toll','Login Hours','Other Expense','Uber Commission','Pay%','Salary','CRFD','P&L'];
+      const row = [
+        document.getElementById('date').value,
+        document.getElementById('driver').value,
+        document.getElementById('vehicle').value,
+        document.getElementById('earnings').value,
+        document.getElementById('cashCollection').value,
+        document.getElementById('trips').value,
+        document.getElementById('toll').value,
+        document.getElementById('loginHours').value,
+        document.getElementById('otherExpense').value,
+        document.getElementById('uberCommission').value,
+        document.getElementById('payPercent').value,
+        document.getElementById('salary').value,
+        document.getElementById('crfd').value,
+        document.getElementById('pl').value
+      ];
+      const csvContent = [headers, row].map(e => e.join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'Fleet-Log-Entry.csv';
+      link.click();
+    }
+  </script>
+  <script src="https://apis.google.com/js/api.js?onload=gapiInit" async defer></script>
+</body>
+</html>
