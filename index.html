@@ -4,47 +4,154 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Fleet Log Book Entry</title>
-  <link rel="stylesheet" href="style.css" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f3f3;
+      margin: 0;
+    }
+    .container {
+      max-width: 1080px;
+      margin: 2rem auto;
+      padding: 2rem;
+      background: white;
+      box-shadow: 0 0 10px #ccc;
+      border-radius: 10px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    input, button {
+      padding: 10px;
+      width: 100%;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      grid-column: span 3;
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    #login {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 768px) {
+      form { grid-template-columns: 1fr; }
+    }
+    .hidden { display: none; }
+  </style>
 </head>
 <body>
   <div class="container">
-    <h1>Fleet Log Book Entry</h1>
-    <div id="signinDiv"></div>
+    <h2>Fleet Log Book Entry</h2>
+    <div id="login"></div>
 
-    <form id="logForm" style="display: none;">
-      <div class="form-row">
-        <div class="form-group"><label>Date</label><input type="date" id="date" /></div>
-        <div class="form-group"><label>Driver</label><input type="text" id="driver" /></div>
-        <div class="form-group"><label>Vehicle</label><input type="text" id="vehicle" /></div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group"><label>Earnings</label><input type="number" id="earnings" /></div>
-        <div class="form-group"><label>Cash Collection</label><input type="number" id="cashCollection" /></div>
-        <div class="form-group"><label>No. of Trips</label><input type="number" id="trips" /></div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group"><label>Toll</label><input type="number" id="toll" /></div>
-        <div class="form-group"><label>Login Hours</label><input type="number" id="loginHours" /></div>
-        <div class="form-group"><label>Other Expense</label><input type="number" id="otherExpense" value="0" /></div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group"><label>Uber Commission</label><input type="number" id="uberCommission" readonly /></div>
-        <div class="form-group"><label>Pay %</label><input type="number" id="payPercent" readonly /></div>
-        <div class="form-group"><label>Salary</label><input type="number" id="salary" readonly /></div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group"><label>CRFD</label><input type="number" id="crfd" readonly /></div>
-        <div class="form-group" style="display:none;"><label>P&L</label><input type="number" id="pl" readonly /></div>
-      </div>
-
+    <form id="logForm" class="hidden">
+      <input type="date" name="Date" placeholder="Date" required />
+      <input type="text" name="Driver" placeholder="Driver" required />
+      <input type="text" name="Vehicle" placeholder="Vehicle" required />
+      <input type="number" name="Earnings" placeholder="Earnings" required />
+      <input type="number" name="Cash Collection" placeholder="Cash Collection" required />
+      <input type="number" name="No. of Trips" placeholder="No. of Trips" />
+      <input type="number" name="Toll" placeholder="Toll" />
+      <input type="number" name="Login Hours" placeholder="Login Hours" />
+      <input type="number" name="Other Expense" placeholder="Other Expense" />
+      <input type="number" name="Uber Commission" placeholder="Uber Commission" readonly />
+      <input type="number" name="Pay%" placeholder="Pay %" readonly />
+      <input type="number" name="Salary" placeholder="Salary" readonly />
+      <input type="number" name="CRFD" placeholder="CRFD" readonly />
+      <input type="number" name="P&L" placeholder="P&L" readonly class="hidden" />
       <button type="submit">Save Entry</button>
     </form>
   </div>
-  <script src="script.js"></script>
+
+  <script>
+    const CLIENT_ID = "287460611306-r657t83lo11cjuim68ednnojetnpjg0s.apps.googleusercontent.com";
+    const SHEET_ID = "19GeheC9UdPOUNrf_k3ItYYysWqhjEwzKgmfXM8POdXA";
+    const SHEET_NAME = "Database";
+    let token = "";
+
+    function calculateFields() {
+      const form = document.forms.logForm;
+      const earnings = parseFloat(form.Earnings.value) || 0;
+      const cash = parseFloat(form["Cash Collection"].value) || 0;
+      const toll = parseFloat(form.Toll.value) || 0;
+      const other = parseFloat(form["Other Expense"].value) || 0;
+
+      let pay = 0;
+      if (earnings >= 5500) pay = 70;
+      else if (earnings >= 4500) pay = 65;
+      else if (earnings >= 3000) pay = 60;
+
+      const salary = earnings * (pay / 100);
+      const crfd = cash - salary - other;
+      const pnl = earnings - salary - other - 1080 + toll;
+      const commission = cash - earnings;
+
+      form["Pay%"].value = pay;
+      form.Salary.value = salary.toFixed(2);
+      form.CRFD.value = crfd.toFixed(2);
+      form["P&L"].value = pnl.toFixed(2);
+      form["Uber Commission"].value = commission.toFixed(2);
+    }
+
+    function onSuccess(tokenObj) {
+      token = tokenObj.credential;
+      document.getElementById("logForm").classList.remove("hidden");
+      document.getElementById("login").classList.add("hidden");
+    }
+
+    window.onload = function () {
+      google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: res => {
+          google.accounts.id.disableAutoSelect();
+          onSuccess(res);
+        }
+      });
+      google.accounts.id.renderButton(
+        document.getElementById("login"),
+        { theme: "outline", size: "large" }
+      );
+
+      const form = document.getElementById("logForm");
+      form.addEventListener("input", calculateFields);
+
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        calculateFields();
+        const data = Array.from(form.elements)
+          .filter(el => el.name)
+          .map(el => el.value);
+
+        try {
+          const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${SHEET_NAME}!A1:append?valueInputOption=USER_ENTERED`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ values: [data] })
+          });
+          const result = await res.json();
+          if (result.updates) alert("Saved Successfully");
+          else alert("Error: " + JSON.stringify(result));
+        } catch (err) {
+          alert("Failed: " + err.message);
+        }
+      };
+    };
+  </script>
 </body>
 </html>
